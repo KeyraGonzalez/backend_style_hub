@@ -1,0 +1,48 @@
+export const TEST_USERS = [
+  {
+    email: 'customer@demo.com',
+    password: 'password123',
+    firstName: 'John',
+    lastName: 'Customer',
+    role: 'customer',
+    phone: '+1234567890',
+    address: {
+      street: '123 Main St',
+      city: 'New York',
+      state: 'NY',
+      zipCode: '10001',
+      country: 'USA',
+    },
+  },
+  {
+    email: 'admin@demo.com',
+    password: 'password123',
+    firstName: 'Jane',
+    lastName: 'Admin',
+    role: 'admin',
+    phone: '+1234567891',
+    address: {
+      street: '456 Admin Ave',
+      city: 'Los Angeles',
+      state: 'CA',
+      zipCode: '90001',
+      country: 'USA',
+    },
+  },
+  {
+    email: 'maria@demo.com',
+    password: 'password123',
+    firstName: 'Maria',
+    lastName: 'Garcia',
+    role: 'customer',
+    phone: '+1234567892',
+  },
+  {
+    email: 'david@demo.com',
+    password: 'password123',
+    firstName: 'David',
+    lastName: 'Johnson',
+    role: 'customer',
+    phone: '+1234567893',
+  },
+];
