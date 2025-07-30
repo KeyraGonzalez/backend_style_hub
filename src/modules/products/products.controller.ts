@@ -31,7 +31,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductFilterDto } from './dto/product-filter.dto';
 import { ProductCategory } from '@core/domain/entities/product.entity';
-import { FileUploadService } from '@shared/utils/file-upload.service';
+import { CloudinaryService } from '@shared/services/cloudinary.service';
 import { Express } from 'express';
 
 @ApiTags('products')
@@ -39,7 +39,7 @@ import { Express } from 'express';
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
-    private readonly fileUploadService: FileUploadService
+    private readonly cloudinaryService: CloudinaryService
   ) {}
 
   @UseGuards(AuthGuard('jwt'))
@@ -66,7 +66,7 @@ export class ProductsController {
     return this.productsService.create(createProductDto);
   }
 
-  // Crear producto con imágenes - CORREGIDO
+  // Crear producto con imágenes usando Cloudinary
   @UseGuards(AuthGuard('jwt'))
   @Post('with-images')
   @UseInterceptors(FilesInterceptor('images', 5))
@@ -93,38 +93,35 @@ export class ProductsController {
         );
       }
 
+      // Validar archivos si existen
+      if (files && files.length > 0) {
+        this.validateFiles(files);
+      }
+
       // Crear el producto primero
       const product = await this.productsService.create(createProductDto);
 
-      // Si hay imágenes, subirlas
+      // Si hay imágenes, subirlas a Cloudinary
       if (files && files.length > 0) {
-        const imagePaths = await this.fileUploadService.uploadMultipleFiles(
+        const uploadResults = await this.cloudinaryService.uploadMultipleImages(
           files,
-          {
-            allowedMimeTypes: [
-              'image/jpeg',
-              'image/jpg',
-              'image/png',
-              'image/webp',
-              'image/gif',
-            ],
-            maxFileSize: 5 * 1024 * 1024,
-            destination: 'products',
-          }
+          'products'
         );
 
-        // Actualizar el producto con las imágenes
+        const imageUrls = uploadResults.map((result) => result.secure_url);
+        const publicIds = uploadResults.map((result) => result.public_id);
+
+        // Actualizar el producto con las URLs de Cloudinary
         const updatedProduct = await this.productsService.addImages(
           product._id.toString(),
-          imagePaths
+          imageUrls,
+          publicIds
         );
 
         return {
           message: 'Product created with images successfully',
           product: updatedProduct,
-          imageUrls: imagePaths.map((path) =>
-            this.fileUploadService.getFileUrl(path)
-          ),
+          imageUrls,
         };
       }
 
@@ -260,10 +257,12 @@ export class ProductsController {
     return this.productsService.remove(id);
   }
 
-  // Subir una sola imagen para un producto
+  // Subir una sola imagen para un producto usando Cloudinary
   @UseGuards(AuthGuard('jwt'))
   @Post(':id/upload-image')
   @UseInterceptors(FileInterceptor('image'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
   async uploadProductImage(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File
@@ -272,24 +271,41 @@ export class ProductsController {
       throw new BadRequestException('No image file provided');
     }
 
-    // Subir la imagen usando el servicio
-    const imagePath = await this.fileUploadService.uploadProductImage(file);
+    // Validar archivo
+    this.validateFiles([file]);
 
-    // Actualizar el producto agregando la nueva imagen
-    const updatedProduct = await this.productsService.addImage(id, imagePath);
+    try {
+      // Subir la imagen a Cloudinary
+      const uploadResult = await this.cloudinaryService.uploadImage(
+        file,
+        'products'
+      );
 
-    return {
-      message: 'Image uploaded successfully',
-      imagePath,
-      imageUrl: this.fileUploadService.getFileUrl(imagePath),
-      product: updatedProduct,
-    };
+      // Actualizar el producto agregando la nueva imagen
+      const updatedProduct = await this.productsService.addImage(
+        id,
+        uploadResult.secure_url,
+        uploadResult.public_id
+      );
+
+      return {
+        message: 'Image uploaded successfully',
+        imageUrl: uploadResult.secure_url,
+        publicId: uploadResult.public_id,
+        product: updatedProduct,
+      };
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw new BadRequestException('Failed to upload image');
+    }
   }
 
-  // Subir múltiples imágenes para un producto
+  // Subir múltiples imágenes para un producto usando Cloudinary
   @UseGuards(AuthGuard('jwt'))
   @Post(':id/upload-images')
-  @UseInterceptors(FilesInterceptor('images', 5)) // Máximo 5 imágenes
+  @UseInterceptors(FilesInterceptor('images', 5))
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
   async uploadProductImages(
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[]
@@ -298,55 +314,93 @@ export class ProductsController {
       throw new BadRequestException('No image files provided');
     }
 
-    // Subir todas las imágenes
-    const imagePaths = await this.fileUploadService.uploadMultipleFiles(files, {
-      allowedMimeTypes: [
-        'image/jpeg',
-        'image/jpg',
-        'image/png',
-        'image/webp',
-        'image/gif',
-      ],
-      maxFileSize: 5 * 1024 * 1024, // 5MB
-      destination: 'products',
-    });
+    // Validar archivos
+    this.validateFiles(files);
 
-    // Actualizar el producto agregando las nuevas imágenes
-    const updatedProduct = await this.productsService.addImages(id, imagePaths);
+    try {
+      // Subir todas las imágenes a Cloudinary
+      const uploadResults = await this.cloudinaryService.uploadMultipleImages(
+        files,
+        'products'
+      );
 
-    return {
-      message: `${imagePaths.length} images uploaded successfully`,
-      imagePaths,
-      imageUrls: imagePaths.map((path) =>
-        this.fileUploadService.getFileUrl(path)
-      ),
-      product: updatedProduct,
-    };
+      const imageUrls = uploadResults.map((result) => result.secure_url);
+      const publicIds = uploadResults.map((result) => result.public_id);
+
+      // Actualizar el producto agregando las nuevas imágenes
+      const updatedProduct = await this.productsService.addImages(
+        id,
+        imageUrls,
+        publicIds
+      );
+
+      return {
+        message: `${imageUrls.length} images uploaded successfully`,
+        imageUrls,
+        publicIds,
+        product: updatedProduct,
+      };
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      throw new BadRequestException('Failed to upload images');
+    }
   }
 
-  // Eliminar una imagen específica de un producto
+  // Eliminar una imagen específica de un producto de Cloudinary
   @UseGuards(AuthGuard('jwt'))
   @Delete(':id/images')
+  @ApiBearerAuth('JWT-auth')
   async removeProductImage(
     @Param('id') id: string,
-    @Body('imagePath') imagePath: string
+    @Body('publicId') publicId: string
   ) {
-    if (!imagePath) {
-      throw new BadRequestException('Image path is required');
+    if (!publicId) {
+      throw new BadRequestException('Public ID is required');
     }
 
-    // Eliminar la imagen del producto
-    const updatedProduct = await this.productsService.removeImage(
-      id,
-      imagePath
-    );
+    try {
+      // Eliminar la imagen del producto en la base de datos
+      const updatedProduct = await this.productsService.removeImageByPublicId(
+        id,
+        publicId
+      );
 
-    // Eliminar el archivo físico
-    await this.fileUploadService.deleteFile(imagePath);
+      // Eliminar la imagen de Cloudinary
+      await this.cloudinaryService.deleteImage(publicId);
 
-    return {
-      message: 'Image removed successfully',
-      product: updatedProduct,
-    };
+      return {
+        message: 'Image removed successfully',
+        product: updatedProduct,
+      };
+    } catch (error) {
+      console.error('Error removing image:', error);
+      throw new BadRequestException('Failed to remove image');
+    }
+  }
+
+  private validateFiles(files: Express.Multer.File[]) {
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'image/gif',
+    ];
+
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    files.forEach((file) => {
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new BadRequestException(
+          `Tipo de archivo no permitido: ${file.mimetype}. Solo se permiten: ${allowedMimeTypes.join(', ')}`
+        );
+      }
+
+      if (file.size > maxSize) {
+        throw new BadRequestException(
+          `Archivo muy grande. Tamaño máximo permitido: 5MB`
+        );
+      }
+    });
   }
 }

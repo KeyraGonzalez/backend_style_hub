@@ -3,16 +3,14 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { NestExpressApplication } from "@nestjs/platform-express" 
-import { join } from 'path';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule); // Usar NestExpressApplication
   const configService = app.get(ConfigService);
 
-  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
-    prefix: '/uploads/', // Esto hará que las imágenes sean accesibles en /uploads/
-  });
+  // Ya no necesitamos servir archivos estáticos localmente
+  // Las imágenes ahora se almacenan en Cloudinary
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -21,8 +19,12 @@ async function bootstrap() {
     })
   );
 
+  const corsOrigin =
+    configService.get('CORS_ORIGIN') || 'http://localhost:3001';
   app.enableCors({
-    origin: configService.get('CORS_ORIGIN') || 'http://localhost:3001',
+    origin: process.env.NODE_ENV === 'production' ? corsOrigin : true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: '*',
     credentials: true,
   });
 
@@ -77,10 +79,11 @@ async function bootstrap() {
   });
 
   const port = configService.get('PORT') || 3000;
-  await app.listen(port);
+  const host = configService.get('HOST') || '0.0.0.0';
+  await app.listen(port, host);
 
-  console.log(`🚀 Backend running on: http://localhost:${port}/api`);
-  console.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
+  console.log(`� Bwackend running on: http://${host}:${port}/api`);
+  console.log(`📚 Swagger documentation: http://${host}:${port}/api/docs`);
 }
 
 bootstrap();

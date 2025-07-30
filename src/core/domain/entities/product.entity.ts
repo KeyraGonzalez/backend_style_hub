@@ -1,6 +1,15 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { BaseEntity } from './base.entity';
 
+@Schema({ _id: false })
+export class ProductImage {
+  @Prop({ required: true })
+  url: string;
+
+  @Prop({ required: true })
+  publicId: string;
+}
+
 export enum ProductCategory {
   SHIRTS = 'shirts',
   PANTS = 'pants',
@@ -55,8 +64,8 @@ export class Product extends BaseEntity {
   @Prop({ type: [String] })
   colors: string[];
 
-  @Prop({ type: [String] })
-  images: string[];
+  @Prop({ type: [ProductImage] })
+  images: ProductImage[];
 
   @Prop({ required: true, min: 0 })
   stock: number;
@@ -81,3 +90,4 @@ export class Product extends BaseEntity {
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);
+export const ProductImageSchema = SchemaFactory.createForClass(ProductImage);

@@ -5,6 +5,7 @@ import {
   Product,
   ProductCategory,
   ProductGender,
+  ProductImage,
 } from '@core/domain/entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -147,10 +148,15 @@ export class ProductsService {
     return product;
   }
 
-  async addImage(id: string, imagePath: string): Promise<Product> {
+  async addImage(
+    id: string,
+    imageUrl: string,
+    publicId: string
+  ): Promise<Product> {
+    const imageData = { url: imageUrl, publicId };
     const product = await this.productModel.findByIdAndUpdate(
       id,
-      { $push: { images: imagePath } },
+      { $push: { images: imageData } },
       { new: true }
     );
     if (!product) {
@@ -159,10 +165,25 @@ export class ProductsService {
     return product;
   }
 
-  async addImages(id: string, imagePaths: string[]): Promise<Product> {
+  async addImages(
+    id: string,
+    imageUrls: string[],
+    publicIds: string[]
+  ): Promise<Product> {
+    if (imageUrls.length !== publicIds.length) {
+      throw new Error(
+        'Image URLs and public IDs arrays must have the same length'
+      );
+    }
+
+    const imageData = imageUrls.map((url, index) => ({
+      url,
+      publicId: publicIds[index],
+    }));
+
     const product = await this.productModel.findByIdAndUpdate(
       id,
-      { $push: { images: { $each: imagePaths } } },
+      { $push: { images: { $each: imageData } } },
       { new: true }
     );
     if (!product) {
@@ -171,10 +192,22 @@ export class ProductsService {
     return product;
   }
 
-  async removeImage(id: string, imagePath: string): Promise<Product> {
+  async removeImage(id: string, imageUrl: string): Promise<Product> {
     const product = await this.productModel.findByIdAndUpdate(
       id,
-      { $pull: { images: imagePath } },
+      { $pull: { images: { url: imageUrl } } },
+      { new: true }
+    );
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+    return product;
+  }
+
+  async removeImageByPublicId(id: string, publicId: string): Promise<Product> {
+    const product = await this.productModel.findByIdAndUpdate(
+      id,
+      { $pull: { images: { publicId } } },
       { new: true }
     );
     if (!product) {

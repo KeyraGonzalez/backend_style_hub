@@ -2,7 +2,7 @@ import { Module, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { APP_FILTER, APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ApiGatewayModule } from './api-gateway/api-gateway.module';
 import { CoreModule } from './core/core.module';
 import { SharedModule } from './shared/shared.module';
