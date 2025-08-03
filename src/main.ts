@@ -4,13 +4,20 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule); // Usar NestExpressApplication
   const configService = app.get(ConfigService);
 
-  // Ya no necesitamos servir archivos estáticos localmente
-  // Las imágenes ahora se almacenan en Cloudinary
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads/',
+  });
+
+  // Servir archivos estáticos desde la carpeta public
+  app.useStaticAssets(join(__dirname, '..', 'public'), {
+    prefix: '/public/',
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -19,10 +26,22 @@ async function bootstrap() {
     })
   );
 
-  const corsOrigin =
-    configService.get('CORS_ORIGIN') || 'http://localhost:3001';
   app.enableCors({
-    origin: process.env.NODE_ENV === 'production' ? corsOrigin : true,
+    origin:
+      process.env.NODE_ENV === 'development'
+        ? [
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3001',
+          ]
+        : [
+            configService.get('CORS_ORIGIN'),
+            'https://frontend-tienda-pi.vercel.app',
+            'https://moda-elegante-backend-production.up.railway.app',
+            /\.railway\.app$/,
+            /\.vercel\.app$/,
+          ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: '*',
     credentials: true,
@@ -55,7 +74,8 @@ async function bootstrap() {
       },
       'JWT-auth'
     )
-    .addServer('http://localhost:3000', 'Servidor de Desarrollo')
+    .addServer('http://localhost:3001', 'Servidor de Desarrollo Local')
+    .addServer('https://moda-elegante-backend-production.up.railway.app', 'Servidor Railway')
     .addServer('https://api.modaelegante.com', 'Servidor de Producción')
     .build();
 
@@ -78,12 +98,19 @@ async function bootstrap() {
     },
   });
 
-  const port = configService.get('PORT') || 3000;
-  const host = configService.get('HOST') || '0.0.0.0';
-  await app.listen(port, host);
+  const port = configService.get('PORT') || process.env.PORT || 3001;
+  const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
 
-  console.log(`� Bwackend running on: http://${host}:${port}/api`);
-  console.log(`📚 Swagger documentation: http://${host}:${port}/api/docs`);
+  try {
+    await app.listen(port, host);
+    console.log(`🚀 Backend running on: http://${host}:${port}/api`);
+    console.log(`📚 Swagger documentation: http://${host}:${port}/api/docs`);
+    console.log(`🌐 Server successfully started on ${host}:${port}`);
+    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+  } catch (error) {
+    console.error('❌ Error starting server:', error);
+    process.exit(1);
+  }
 }
 
 bootstrap();
